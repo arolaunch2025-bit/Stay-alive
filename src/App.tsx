@@ -4,6 +4,7 @@ import { Activity, BookOpen, Brain, CalendarDays, Check, ChevronRight, CircleHel
 type Entry = { id:string; date:string; hour:number; emotion:string; emotionScore:number; emotionIntensity:number; feeling:string; feelingScore:number; feelingIntensity:number; thought:string; thoughtType:string; thoughtScore:number; attention:number; note:string; createdAt:number }
 type Journal = { id:string; date:string; title:string; body:string }
 type Asset = { id:string; name:string; type:string; data:string; date:string }
+type TempleTemplate = { id:string; name:string; imageId:string; audioId:string; intention:string; duration:number; createdAt:number }
 const EMOTIONS = ['Joie','Sérénité','Enthousiasme','Confiance','Courage','Espoir','Curiosité','Gratitude','Satisfaction','Tendresse','Soulagement','Peur','Anxiété','Inquiétude','Tristesse','Mélancolie','Colère','Irritation','Frustration','Honte','Culpabilité','Jalousie','Solitude','Confusion','Ennui','Découragement']
 const FEELINGS = ['Amour','Paix','Foi','Compassion','Bienveillance','Admiration','Respect','Gratitude','Pardon','Acceptation','Confiance','Méfiance','Ressentiment','Rancœur','Désir','Passion','Attachement','Détermination','Fidélité','Détachement']
 const THOUGHTS = ['Constructive','Créative','Souvenir du passé','Projection future','Scénario imaginaire','Conversation imaginaire','Sexuelle','Relationnelle','Rumination','Intrusive','Influence collective / égrégore','Autre']
@@ -41,6 +42,8 @@ export default function App() {
   const [templeAudioId,setTempleAudioId]=useState<string>(()=>read('temple-audio',''))
   const [intention,setIntention]=useState<string>(()=>read('temple-intention',''))
   const [savedIntention,setSavedIntention]=useState<string>(()=>read('temple-saved-intention',''))
+  const [templeTemplates,setTempleTemplates]=useState<TempleTemplate[]>(()=>read('temple-templates',[]))
+  const [showTempleTemplates,setShowTempleTemplates]=useState(false)
   const [installPrompt,setInstallPrompt]=useState<any>(null)
   const [toast,setToast]=useState('')
   const [showAll,setShowAll]=useState(false)
@@ -52,6 +55,7 @@ export default function App() {
   useEffect(()=>persist('temple-audio',templeAudioId),[templeAudioId])
   useEffect(()=>persist('temple-intention',intention),[intention])
   useEffect(()=>persist('temple-saved-intention',savedIntention),[savedIntention])
+  useEffect(()=>persist('temple-templates',templeTemplates),[templeTemplates])
   useEffect(()=>{const handler=(e:Event)=>{e.preventDefault();setInstallPrompt(e)};window.addEventListener('beforeinstallprompt',handler);return()=>window.removeEventListener('beforeinstallprompt',handler)},[])
   useEffect(()=>{if(!running)return;const id=window.setInterval(()=>setSeconds(s=>{if(s<=1){setRunning(false);setToast('Séance terminée. Prends un instant pour observer ton état.');return 0}return s-1}),1000);return()=>clearInterval(id)},[running])
   useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(''),3200);return()=>clearTimeout(id)},[toast])
@@ -77,6 +81,8 @@ export default function App() {
   const templeImage=assets.find(a=>a.id===templeImageId&&a.type.startsWith('image/'))
   const templeAudio=assets.find(a=>a.id===templeAudioId&&a.type.startsWith('audio/'))
   const saveIntention=()=>{if(!intention.trim()){setToast('Écris d’abord ton intention.');return}setSavedIntention(intention.trim());setToast('Ton intention est enregistrée dans le Temple.')}
+  const saveTempleTemplate=()=>{const config={imageId:templeImageId,audioId:templeAudioId,intention:(savedIntention||intention).trim(),duration:meditationMinutes};const duplicate=templeTemplates.find(t=>t.imageId===config.imageId&&t.audioId===config.audioId&&t.intention===config.intention&&t.duration===config.duration);if(duplicate){window.alert('Cette configuration est déjà enregistrée sous le nom « '+duplicate.name+' ».');return}const name=window.prompt('Donne un nom à ce template de méditation :');if(name===null)return;const cleanName=name.trim();if(!cleanName){window.alert('Le nom du template ne peut pas être vide.');return}if(templeTemplates.some(t=>t.name.toLocaleLowerCase()===cleanName.toLocaleLowerCase())){window.alert('Un template porte déjà ce nom. Choisis un autre nom.');return}setTempleTemplates(p=>[{id:uid(),name:cleanName,...config,createdAt:Date.now()},...p]);setToast('Template « '+cleanName+' » enregistré.')}
+  const applyTempleTemplate=(template:TempleTemplate)=>{setTempleImageId(template.imageId);setTempleAudioId(template.audioId);setIntention(template.intention);setSavedIntention(template.intention);setMeditationMinutes(template.duration);setRunning(false);setSeconds(0);setShowTempleTemplates(false);setToast('Template « '+template.name+' » chargé dans le Temple.')}
   const exportData=()=>{const blob=new Blob([JSON.stringify({entries,journals,assets:assets.map(({data,...a})=>({...a,data})),exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='stay-alive-sauvegarde.json';a.click();URL.revokeObjectURL(url)}
   const nav=[{name:'Contrôle',icon:Activity},{name:'Journal',icon:BookOpen},{name:'Bibliothèque',icon:Library},{name:'Temple',icon:Sparkles},{name:'Évolution',icon:Leaf}]
   const fmt=(s:number)=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')
@@ -145,8 +151,13 @@ export default function App() {
               <div className="panel-heading"><div><span className="eyebrow">AUTOSUGGESTION</span><h3>Mon intention personnelle</h3></div><Heart size={19}/></div>
               <p className="muted">Écris une phrase positive, réaliste et personnelle que tu souhaites méditer ou te répéter.</p>
               <textarea className="intention-editor" value={intention} onChange={e=>setIntention(e.target.value)} placeholder="Ex. : Je prends le temps d'observer mes émotions et de choisir mes réactions avec calme."/>
-              <button className="primary-btn" onClick={saveIntention}><Save size={15}/> Enregistrer mon intention</button>
+              <div className="temple-save-actions"><button className="primary-btn" onClick={saveIntention}><Save size={15}/> Enregistrer mon intention</button><button className="secondary-btn" onClick={saveTempleTemplate}><Save size={15}/> Enregistrer</button></div>
               {savedIntention&&<div className="saved-intention"><small>INTENTION ENREGISTRÉE</small><p>{savedIntention}</p><button className="text-action" onClick={()=>setIntention(savedIntention)}>Modifier cette intention</button></div>}
+            </section>
+            <section className="panel temple-tool-panel template-library-panel">
+              <div className="panel-heading"><div><span className="eyebrow">MES RITUELS</span><h3>Templates de méditation</h3></div><Sparkles size={19}/></div>
+              <button className="secondary-btn" onClick={()=>setShowTempleTemplates(v=>!v)}><Library size={15}/>{showTempleTemplates?'Masquer les templates':'Choisir un template'} <span className="count">{templeTemplates.length}</span></button>
+              {showTempleTemplates&&<div className="temple-template-list">{templeTemplates.length?templeTemplates.map(template=><div className="temple-template-item" key={template.id}><div><b>{template.name}</b><small>{template.duration} min · {template.intention?'Intention enregistrée':'Sans intention'} · {template.imageId?'Image':'Sans image'} · {template.audioId?'Musique':'Sans musique'}</small></div><button className="primary-btn" onClick={()=>applyTempleTemplate(template)}>Afficher</button></div>):<div className="empty-state"><Leaf size={22}/><p>Aucun template enregistré.</p><small>Configure ton image, ta musique, ton intention et ta durée, puis appuie sur « Enregistrer ».</small></div>}</div>}
             </section>
           </div>
         </div>}
