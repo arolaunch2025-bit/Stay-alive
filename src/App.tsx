@@ -37,6 +37,10 @@ export default function App() {
   const [seconds,setSeconds]=useState(0)
   const [running,setRunning]=useState(false)
   const [meditating,setMeditating]=useState(false)
+  const [templeImageId,setTempleImageId]=useState<string>(()=>read('temple-image',''))
+  const [templeAudioId,setTempleAudioId]=useState<string>(()=>read('temple-audio',''))
+  const [intention,setIntention]=useState<string>(()=>read('temple-intention',''))
+  const [savedIntention,setSavedIntention]=useState<string>(()=>read('temple-saved-intention',''))
   const [installPrompt,setInstallPrompt]=useState<any>(null)
   const [toast,setToast]=useState('')
   const [showAll,setShowAll]=useState(false)
@@ -44,6 +48,10 @@ export default function App() {
   useEffect(()=>persist('entries',entries),[entries])
   useEffect(()=>persist('journals',journals),[journals])
   useEffect(()=>persist('assets',assets),[assets])
+  useEffect(()=>persist('temple-image',templeImageId),[templeImageId])
+  useEffect(()=>persist('temple-audio',templeAudioId),[templeAudioId])
+  useEffect(()=>persist('temple-intention',intention),[intention])
+  useEffect(()=>persist('temple-saved-intention',savedIntention),[savedIntention])
   useEffect(()=>{const handler=(e:Event)=>{e.preventDefault();setInstallPrompt(e)};window.addEventListener('beforeinstallprompt',handler);return()=>window.removeEventListener('beforeinstallprompt',handler)},[])
   useEffect(()=>{if(!running)return;const id=window.setInterval(()=>setSeconds(s=>{if(s<=1){setRunning(false);setToast('Séance terminée. Prends un instant pour observer ton état.');return 0}return s-1}),1000);return()=>clearInterval(id)},[running])
   useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(''),3200);return()=>clearTimeout(id)},[toast])
@@ -65,6 +73,10 @@ export default function App() {
   }
   const saveJournal=()=>{if(!journalBody.trim())return;setJournals(p=>[{id:uid(),date:today(),title:journalTitle||'Journal du jour',body:journalBody},...p]);setJournalTitle('');setJournalBody('');setToast('Journal enregistré.')}
   const importAsset=async(files:FileList|null)=>{if(!files)return;for(const file of Array.from(files)){const data=await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=reject;r.readAsDataURL(file)});setAssets(p=>[{id:uid(),name:file.name,type:file.type,data,date:today()},...p])}setToast('Ressource ajoutée à la bibliothèque locale.')}
+  const importTempleImage=async(file:File|null)=>{if(!file)return;if(!file.type.startsWith('image/')){setToast('Choisis un fichier image.');return}const data=await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=reject;r.readAsDataURL(file)});const id=uid();setAssets(p=>[{id,name:file.name,type:file.type,data,date:today()},...p]);setTempleImageId(id);setToast('Image ajoutée au Temple et à la Bibliothèque.')}
+  const templeImage=assets.find(a=>a.id===templeImageId&&a.type.startsWith('image/'))
+  const templeAudio=assets.find(a=>a.id===templeAudioId&&a.type.startsWith('audio/'))
+  const saveIntention=()=>{if(!intention.trim()){setToast('Écris d’abord ton intention.');return}setSavedIntention(intention.trim());setToast('Ton intention est enregistrée dans le Temple.')}
   const exportData=()=>{const blob=new Blob([JSON.stringify({entries,journals,assets:assets.map(({data,...a})=>({...a,data})),exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='stay-alive-sauvegarde.json';a.click();URL.revokeObjectURL(url)}
   const nav=[{name:'Contrôle',icon:Activity},{name:'Journal',icon:BookOpen},{name:'Bibliothèque',icon:Library},{name:'Temple',icon:Sparkles},{name:'Évolution',icon:Leaf}]
   const fmt=(s:number)=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')
@@ -99,8 +111,45 @@ export default function App() {
 
         {tab==='Bibliothèque'&&<div className="single-grid"><section className="panel"><div className="panel-heading"><div><span className="eyebrow">ESPACE DE RESSOURCES</span><h2>Ma bibliothèque</h2></div><Library/></div><p className="muted">Importe des images, sons et documents. Ils sont conservés dans le stockage local de cet appareil.</p><label className="upload-zone"><Upload size={25}/><b>Ajouter des ressources</b><span>Images, audio, PDF et autres fichiers</span><input type="file" multiple accept="image/*,audio/*,application/pdf,text/plain" onChange={e=>importAsset(e.target.files)}/></label><div className="asset-grid">{assets.filter(a=>a.name.toLowerCase().includes(query.toLowerCase())).map(a=><div className="asset" key={a.id}>{a.type.startsWith('image/')?<img src={a.data} alt={a.name}/>:<div className="asset-icon"><BookOpen/></div>}<div><b>{a.name}</b><small>{a.date} · {a.type.split('/')[0]||'fichier'}</small></div><button className="icon-button" onClick={()=>setAssets(p=>p.filter(x=>x.id!==a.id))}><Trash2 size={15}/></button></div>)}</div></section><section className="panel"><h3>Une bibliothèque à ton rythme</h3><p className="muted">Tes ressources restent sur cet appareil. Pense à exporter régulièrement tes données pour éviter toute perte en cas de changement de navigateur ou d'appareil.</p><button className="secondary-btn" onClick={exportData}><Download size={16}/> Exporter mes ressources et données</button></section></div>}
 
-        {tab==='Temple'&&<div className="temple-layout"><section className="meditation-screen"><div className="temple-glow"><div className="sun-disc"/></div><span className="eyebrow">TON ESPACE DE SILENCE</span><h2>{meditating?'Reviens doucement à ta respiration.':'Prends un instant pour toi.'}</h2><p>Laisse les pensées passer. Tu n'as rien à résoudre pendant cet instant.</p><div className="timer">{fmt(seconds||meditationMinutes*60)}</div><div className="timer-controls"><button className="primary-btn" onClick={()=>{if(!running&&seconds===0)setSeconds(meditationMinutes*60);setRunning(!running)}}>{running?'Pause':seconds>0?'Reprendre':'Commencer'}</button><button className="secondary-btn" onClick={()=>{setRunning(false);setSeconds(0)}}>Réinitialiser</button></div><label className="duration-label">Durée <select value={meditationMinutes} onChange={e=>{setMeditationMinutes(+e.target.value);setSeconds(0);setRunning(false)}}><option value={3}>3 minutes</option><option value={5}>5 minutes</option><option value={10}>10 minutes</option><option value={15}>15 minutes</option><option value={20}>20 minutes</option><option value={30}>30 minutes</option></select></label></section><section className="panel"><span className="eyebrow">INTENTION DU MOMENT</span><h3>Une autosuggestion</h3><blockquote>« Je peux accueillir ce que je ressens sans être obligé d'agir sous son impulsion. »</blockquote><p className="muted">Tu peux lire cette phrase avant ta séance, ou la remplacer par une intention personnelle dans ton journal.</p><button className="secondary-btn" onClick={()=>setTab('Journal')}>Écrire mon intention <ChevronRight size={15}/></button></section></div>}
-
+        {tab==='Temple'&&<div className="temple-layout">
+          <section className="meditation-screen">
+            <div className="temple-visual">
+              {templeImage?<img src={templeImage.data} alt="Support visuel de méditation" className="temple-image"/>:<div className="temple-glow"><div className="sun-disc"/></div>}
+            </div>
+            <span className="eyebrow">TON ESPACE DE SILENCE</span>
+            <h2>{running?'Reviens doucement à ta respiration.':'Prends un instant pour toi.'}</h2>
+            <p>Laisse les pensées passer. Tu n'as rien à résoudre pendant cet instant.</p>
+            {savedIntention&&<blockquote className="active-intention">« {savedIntention} »</blockquote>}
+            <div className="timer">{fmt(seconds||meditationMinutes*60)}</div>
+            <div className="timer-controls"><button className="primary-btn" onClick={()=>{if(!running&&seconds===0)setSeconds(meditationMinutes*60);setRunning(!running)}}>{running?'Pause':seconds>0?'Reprendre':'Commencer'}</button><button className="secondary-btn" onClick={()=>{setRunning(false);setSeconds(0)}}>Réinitialiser</button></div>
+            <label className="duration-label">Durée <select value={meditationMinutes} onChange={e=>{setMeditationMinutes(+e.target.value);setSeconds(0);setRunning(false)}}><option value={3}>3 minutes</option><option value={5}>5 minutes</option><option value={10}>10 minutes</option><option value={15}>15 minutes</option><option value={20}>20 minutes</option><option value={30}>30 minutes</option></select></label>
+          </section>
+          <div className="temple-tools">
+            <section className="panel temple-tool-panel">
+              <div className="panel-heading"><div><span className="eyebrow">SUPPORT VISUEL</span><h3>Mon image de méditation</h3></div><ImagePlus size={20}/></div>
+              {templeImage?<div className="temple-preview"><img src={templeImage.data} alt={templeImage.name}/><div><b>{templeImage.name}</b><button className="text-action" onClick={()=>setTempleImageId('')}>Retirer l’image</button></div></div>:<p className="muted">Choisis une image apaisante à garder sous les yeux pendant ta séance.</p>}
+              <label className="temple-upload"><Upload size={16}/> Importer une image<input type="file" accept="image/*" onChange={e=>{importTempleImage(e.target.files?.[0]||null);e.currentTarget.value=''}}/></label>
+              <label className="temple-select-label">Ou choisir dans ma bibliothèque
+                <select value={templeImageId} onChange={e=>setTempleImageId(e.target.value)}><option value="">Aucune image sélectionnée</option>{assets.filter(a=>a.type.startsWith('image/')).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+              </label>
+            </section>
+            <section className="panel temple-tool-panel">
+              <div className="panel-heading"><div><span className="eyebrow">AMBIANCE SONORE</span><h3>Ma musique</h3></div><Wind size={20}/></div>
+              <label className="temple-select-label">Choisir un son dans ma bibliothèque
+                <select value={templeAudioId} onChange={e=>setTempleAudioId(e.target.value)}><option value="">Aucune musique</option>{assets.filter(a=>a.type.startsWith('audio/')).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+              </label>
+              {templeAudio?<div className="audio-player"><div className="audio-file"><Sparkles size={17}/><b>{templeAudio.name}</b></div><audio key={templeAudio.id} controls preload="metadata" src={templeAudio.data}>Ton navigateur ne prend pas en charge la lecture audio.</audio></div>:<p className="muted">Ajoute des fichiers audio dans la Bibliothèque pour les retrouver ici et les écouter pendant ta méditation.</p>}
+              <button className="secondary-btn" onClick={()=>setTab('Bibliothèque')}><Library size={15}/> Ouvrir la Bibliothèque</button>
+            </section>
+            <section className="panel temple-tool-panel">
+              <div className="panel-heading"><div><span className="eyebrow">AUTOSUGGESTION</span><h3>Mon intention personnelle</h3></div><Heart size={19}/></div>
+              <p className="muted">Écris une phrase positive, réaliste et personnelle que tu souhaites méditer ou te répéter.</p>
+              <textarea className="intention-editor" value={intention} onChange={e=>setIntention(e.target.value)} placeholder="Ex. : Je prends le temps d'observer mes émotions et de choisir mes réactions avec calme."/>
+              <button className="primary-btn" onClick={saveIntention}><Save size={15}/> Enregistrer mon intention</button>
+              {savedIntention&&<div className="saved-intention"><small>INTENTION ENREGISTRÉE</small><p>{savedIntention}</p><button className="text-action" onClick={()=>setIntention(savedIntention)}>Modifier cette intention</button></div>}
+            </section>
+          </div>
+        </div>}
         {tab==='Évolution'&&<div className="evolution-grid"><section className="panel"><span className="eyebrow">LES 7 DERNIERS JOURS</span><h2>Observer les tendances</h2><p className="muted">Synthèse descriptive calculée à partir des observations enregistrées.</p><div className="big-number">{weekEntries.length}<small> observations</small></div><div className="metric-list"><div><span>Valence émotionnelle moyenne</span><b>{weekEntries.length?scoreLabel(+average(weekEntries.map(e=>e.emotionScore)).toFixed(1)):'—'}</b></div><div><span>Valence sentimentale moyenne</span><b>{weekEntries.length?scoreLabel(+average(weekEntries.map(e=>e.feelingScore)).toFixed(1)):'—'}</b></div><div><span>Capture attentionnelle moyenne</span><b>{weekEntries.length?average(weekEntries.map(e=>e.attention)).toFixed(1)+'/10':'—'}</b></div><div><span>Jours avec observations</span><b>{new Set(weekEntries.map(e=>e.date)).size}/7</b></div></div></section><section className="panel"><span className="eyebrow">REPÈRES DE LA SEMAINE</span><h3>Ce qui revient le plus souvent</h3>{weekEntries.length?<><p>Émotion la plus notée : <b>{mode(weekEntries.map(e=>e.emotion))}</b></p><p>Sentiment le plus noté : <b>{mode(weekEntries.map(e=>e.feeling))}</b></p><p>Type de pensée le plus noté : <b>{mode(weekEntries.map(e=>e.thoughtType))}</b></p><div className="prompt-box">Piste de réflexion : dans quelles situations ces expériences apparaissent-elles ? Cherche les contextes récurrents avant de tirer une conclusion.</div></>:<div className="empty-state"><Leaf/><p>Les tendances apparaîtront après quelques observations.</p></div>}</section><section className="panel"><h3>Historique</h3><label className="date-field">Choisir une journée <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}/></label><p className="muted">{dayEntries.length} observations enregistrées pour cette date.</p><button className="secondary-btn" onClick={()=>setTab('Contrôle')}>Voir les observations <ChevronRight size={15}/></button></section></div>}
       </div>
       <footer>STAY-ALIVE <span>·</span> Observer sans se juger. Évoluer sans se contraindre.</footer>
