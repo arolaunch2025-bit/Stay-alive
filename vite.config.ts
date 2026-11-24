@@ -18,7 +18,8 @@ export default defineConfig({
         background_color: '#f7faf6',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: '/',
+        start_url: './',
+        scope: './',
         icons: [
           { src: '/leaf.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
         ]
