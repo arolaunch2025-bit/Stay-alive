@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, BookOpen, Brain, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Download, Heart, ImagePlus, Leaf, Library, Menu, Moon, Plus, Save, Search, Settings2, ShieldCheck, Sparkles, Sun, Temple, Timer, Trash2, Upload, Wind, X } from 'lucide-react'
+import { Activity, BookOpen, Brain, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Download, Heart, ImagePlus, Leaf, Library, Save, Search, Settings2, ShieldCheck, Sparkles, Sun, Trash2, Upload, Wind } from 'lucide-react'
 
 type Entry = { id:string; date:string; hour:number; emotion:string; emotionScore:number; emotionIntensity:number; feeling:string; feelingScore:number; feelingIntensity:number; thought:string; thoughtType:string; thoughtScore:number; attention:number; note:string; createdAt:number }
 type Journal = { id:string; date:string; title:string; body:string }
